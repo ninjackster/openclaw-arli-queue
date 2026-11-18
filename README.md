@@ -1,0 +1,68 @@
+# openclaw-arli-queue
+
+An OpenClaw provider plugin that sends requests to a one-slot model provider
+one at a time. Built for Arli AI Plus, which allows one parallel request and
+answers a second with HTTP 429 ("exceeded the maximum number of parallel
+requests").
+
+OpenClaw 2026.11.3 has no per-provider concurrency setting. Without this
+plugin, two chats (or a chat plus a background job) both send at once, one is
+rejected, retries run out and the turn falls through the fallback list.
+
+## What it does
+
+- Wraps the provider's stream function (`wrapStreamFn`) with a FIFO queue.
+- A request waits for a free slot before it is sent. The slot is released
+  when the response stream finishes, fails or is aborted.
+- Foreground chats go ahead of background work (`modelCallUrgency`).
+- Leaves the provider's config, key and models alone. It works with a
+  provider defined in `models.providers.<id>`.
+
+## Config
+
+Optional, under `plugins.entries.arli-queue.config`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `providers` | `["arli"]` | Provider ids to queue. |
+| `maxConcurrent` | `1` | Requests allowed at once per provider. |
+| `holdAfterAbortMs` | `0` | Keep the slot this long after an aborted request, for upstreams that still count an abandoned request. |
+
+Changing `providers` to an id other than `arli` also needs that id added to
+`providers` in `openclaw.plugin.json` and `package.json`.
+
+## Install
+
+    npm pack --pack-destination ./dist-pack
+    openclaw plugins install npm-pack:./dist-pack/openclaw-arli-queue-0.1.0.tgz --force --accept-capabilities --acknowledge-install-policy-warning
+    openclaw plugins inspect arli-queue --runtime --json
+
+The Gateway loads it without a restart. The log shows
+`[arli-queue] ready {...}` and, when a request had to wait,
+`[arli-queue] request waited for a slot {...}`.
+
+## Remove
+
+    openclaw plugins uninstall arli-queue
+
+## Limits
+
+- Time spent waiting in the queue counts against OpenClaw's model idle
+  timeout for that provider (`models.providers.<id>.timeoutSeconds`). Keep it
+  comfortably above the longest expected wait.
+- The queue lives in one Gateway process. `openclaw agent --local` runs and
+  other machines using the same key are not coordinated.
+- It cannot shorten how long the upstream keeps a slot busy after OpenClaw
+  abandons a request. `holdAfterAbortMs` only stops the next request from
+  being sent into that window.
+
+## Tests
+
+    npm test                       # queue logic, 9 tests
+    node test/mock-one-slot-server.mjs 18796 6000   # mock upstream with one slot
+    test/run-two.sh <label>        # two simultaneous turns through an isolated Gateway
+
+Verified 2026-11-17 on OpenClaw 2026.11.3 against the mock server only:
+without the plugin, two simultaneous turns produced 3 rejections; with it, two
+and then three simultaneous turns produced 0, with the key read from the
+secret store. Not tested against the real Arli API.

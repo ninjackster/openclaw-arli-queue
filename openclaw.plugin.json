@@ -1,0 +1,17 @@
+{
+  "id": "arli-queue",
+  "name": "Arli Queue",
+  "description": "Sends requests to a one-slot model provider one at a time instead of in parallel.",
+  "categories": ["models"],
+  "providers": ["arli"],
+  "activation": { "onStartup": true },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "providers": { "type": "array", "items": { "type": "string" } },
+      "maxConcurrent": { "type": "integer", "minimum": 1 },
+      "holdAfterAbortMs": { "type": "number", "minimum": 0 }
+    }
+  }
+}
