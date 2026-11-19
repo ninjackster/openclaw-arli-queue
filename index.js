@@ -1,8 +1,9 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { PRIORITY, SlotQueue, wrapStreamWithQueue } from "./queue.js";
+import { cleanToolParams } from "./toolargs.js";
 
 const PLUGIN_ID = "arli-queue";
-const DEFAULTS = { providers: ["arli"], maxConcurrent: 1, holdAfterAbortMs: 0 };
+const DEFAULTS = { providers: ["arli"], maxConcurrent: 1, holdAfterAbortMs: 0, cleanToolArgs: true };
 
 function readConfig(raw) {
   const cfg = raw && typeof raw === "object" ? raw : {};
@@ -15,7 +16,8 @@ function readConfig(raw) {
   const holdAfterAbortMs = Number.isFinite(cfg.holdAfterAbortMs) && cfg.holdAfterAbortMs >= 0
     ? cfg.holdAfterAbortMs
     : DEFAULTS.holdAfterAbortMs;
-  return { providers, maxConcurrent, holdAfterAbortMs };
+  const cleanToolArgs = typeof cfg.cleanToolArgs === "boolean" ? cfg.cleanToolArgs : DEFAULTS.cleanToolArgs;
+  return { providers, maxConcurrent, holdAfterAbortMs, cleanToolArgs };
 }
 
 export default definePluginEntry({
@@ -46,6 +48,15 @@ export default definePluginEntry({
           });
           return Object.assign(wrapped, { preservesGenericCompatibility: true });
         },
+      });
+    }
+    if (cfg.cleanToolArgs) {
+      // Strip stray leading/trailing whitespace from path arguments before a tool runs.
+      api.on("before_tool_call", (event) => {
+        const cleaned = cleanToolParams(event.toolName, event.params);
+        if (!cleaned) return undefined;
+        log("cleaned tool arguments", { tool: event.toolName });
+        return { params: cleaned };
       });
     }
     log("ready", cfg);

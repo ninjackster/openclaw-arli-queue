@@ -17,6 +17,11 @@ rejected, retries run out and the turn falls through the fallback list.
 - Foreground chats go ahead of background work (`modelCallUrgency`).
 - Leaves the provider's config, key and models alone. It works with a
   provider defined in `models.providers.<id>`.
+- Cleans tool arguments: some models (seen with GLM 4.6 Derestricted) start
+  string arguments with stray newlines, so `"\n\n/Users/me/file"` is read as a
+  relative path and the tool fails. A `before_tool_call` hook trims whitespace
+  from path arguments and from the start of an `apply_patch` body. This applies
+  to every agent on the Gateway, whatever model it uses.
 
 ## Config
 
@@ -27,6 +32,7 @@ Optional, under `plugins.entries.arli-queue.config`:
 | `providers` | `["arli"]` | Provider ids to queue. |
 | `maxConcurrent` | `1` | Requests allowed at once per provider. |
 | `holdAfterAbortMs` | `0` | Keep the slot this long after an aborted request, for upstreams that still count an abandoned request. |
+| `cleanToolArgs` | `true` | Trim stray whitespace from path tool arguments. |
 
 Changing `providers` to an id other than `arli` also needs that id added to
 `providers` in `openclaw.plugin.json` and `package.json`.
@@ -34,7 +40,7 @@ Changing `providers` to an id other than `arli` also needs that id added to
 ## Install
 
     npm pack --pack-destination ./dist-pack
-    openclaw plugins install npm-pack:./dist-pack/openclaw-arli-queue-0.1.0.tgz --force --accept-capabilities --acknowledge-install-policy-warning
+    openclaw plugins install npm-pack:./dist-pack/openclaw-arli-queue-0.2.0.tgz --force --accept-capabilities --acknowledge-install-policy-warning
     openclaw plugins inspect arli-queue --runtime --json
 
 The Gateway loads it without a restart. The log shows
@@ -58,11 +64,17 @@ The Gateway loads it without a restart. The log shows
 
 ## Tests
 
-    npm test                       # queue logic, 9 tests
+    npm test                       # queue and argument cleanup, 14 tests
     node test/mock-one-slot-server.mjs 18796 6000   # mock upstream with one slot
     test/run-two.sh <label>        # two simultaneous turns through an isolated Gateway
 
-Verified 2026-11-17 on OpenClaw 2026.11.3 against the mock server only:
-without the plugin, two simultaneous turns produced 3 rejections; with it, two
-and then three simultaneous turns produced 0, with the key read from the
-secret store. Not tested against the real Arli API.
+Verified on OpenClaw 2026.11.3:
+
+- Mock server, 2026-11-17: without the plugin, two simultaneous turns produced
+  3 rejections; with it, two and then three simultaneous turns produced 0, with
+  the key read from the secret store.
+- Real Arli API (Plus plan), 2026-11-17: three requests competing for the slot,
+  0 rejections; the two queued turns waited about 200 seconds and completed.
+- Argument cleanup, 2026-11-18, mock server: a `read` call with a
+  newline-prefixed absolute path failed without the hook and returned the file
+  with it.

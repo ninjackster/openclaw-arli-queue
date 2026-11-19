@@ -41,7 +41,31 @@ http.createServer((req, res) => {
     const chunk = (delta, finishReason = null) =>
       res.write(`data: ${JSON.stringify({ id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model: "mock-model", choices: [{ index: 0, delta, finish_reason: finishReason }] })}\n\n`);
     chunk({ role: "assistant", content: "" });
-    const words = `mock reply number ${n} ok`.split(" ");
+    // Optional tool-call mode: TOOLCALL_FILE=/abs/file makes the first request of a
+    // turn call the read tool with a path that starts with stray newlines, the
+    // way GLM 4.6 Derestricted does. The follow-up request reports the tool result.
+    let parsed = {};
+    try { parsed = JSON.parse(body); } catch {}
+    const msgs = Array.isArray(parsed.messages) ? parsed.messages : [];
+    const toolMsgs = msgs.filter((m) => m.role === "tool");
+    if (process.env.TOOLCALL_FILE && toolMsgs.length === 0) {
+      const names = (parsed.tools || []).map((t) => t.function?.name).filter(Boolean);
+      const name = names.includes("read") ? "read" : names[0];
+      stats.log.push(`${stamp()} tool call ${name} with newline-prefixed path`);
+      chunk({ tool_calls: [{ index: 0, id: `call_mock_${n}`, type: "function", function: { name, arguments: JSON.stringify({ path: "\n\n" + process.env.TOOLCALL_FILE }) } }] });
+      chunk({}, "tool_calls");
+      res.write("data: [DONE]\n\n");
+      res.end(); finish("complete");
+      return;
+    }
+    let replyText = `mock reply number ${n} ok`;
+    if (toolMsgs.length > 0) {
+      const last = toolMsgs[toolMsgs.length - 1];
+      const text = typeof last.content === "string" ? last.content : JSON.stringify(last.content);
+      replyText = `TOOL RESULT: ${text.replace(/\s+/g, " ").slice(0, 110)}`;
+      stats.log.push(`${stamp()} ${replyText}`);
+    }
+    const words = replyText.split(" ");
     let i = 0;
     const timer = setInterval(() => {
       if (done) return clearInterval(timer);

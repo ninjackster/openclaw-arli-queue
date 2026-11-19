@@ -1,6 +1,6 @@
 {
   "name": "openclaw-arli-queue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenClaw provider plugin that queues requests to a one-slot model provider (Arli AI Plus).",
   "type": "module",
   "license": "MIT",
@@ -10,6 +10,7 @@
   "files": [
     "index.js",
     "queue.js",
+    "toolargs.js",
     "openclaw.plugin.json",
     "README.md",
     "LICENSE"
