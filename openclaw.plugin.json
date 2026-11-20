@@ -1,7 +1,7 @@
 {
   "id": "arli-queue",
   "name": "Arli Queue",
-  "description": "Queues requests to a one-slot model provider and cleans stray whitespace from path tool arguments.",
+  "description": "Queues requests to a one-slot model provider, cleans stray whitespace from path tool arguments, and adds image generation through the provider's SDNext-style API.",
   "categories": [
     "models"
   ],
@@ -31,7 +31,56 @@
       },
       "cleanToolArgs": {
         "type": "boolean"
+      },
+      "images": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "queue": {
+            "type": "boolean"
+          },
+          "modelPreference": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "steps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 40
+          },
+          "denoisingStrength": {
+            "type": "number"
+          },
+          "maxPixels": {
+            "type": "integer"
+          },
+          "editModelPreference": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "authProvider": {
+            "type": "string"
+          }
+        }
       }
     }
+  },
+  "contracts": {
+    "imageGenerationProviders": [
+      "arli"
+    ]
   }
 }
